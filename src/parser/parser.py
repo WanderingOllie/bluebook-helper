@@ -24,17 +24,17 @@ class Parser:
     def parse(self) -> Document:
         """Parse the document body into a Document of ordered Blocks."""
         document = Document()
-        for para in self._document_tree.findall(".//w:p", DOCX_NS):
-            self._parse_paragraph(para, BlockType.PARAGRAPH, document)
+        runs = self._document_tree.findall(".//w:r", DOCX_NS)
+        self._walk_runs(runs, BlockType.PARAGRAPH, document)
         return document
 
-    def _parse_paragraph(
-        self, para: etree.Element, block_type: BlockType, document: Document
+    def _walk_runs(
+        self, runs: list[etree.Element], block_type: BlockType, document: Document
     ) -> None:
-        """Walk a paragraph's runs, splitting into blocks on footnote refs."""
+        """Walk a sequence of runs, splitting into blocks on footnote refs."""
         current_block = Block(self._next_block_order(), block_type)
 
-        for run in para.findall(".//w:r", DOCX_NS):
+        for run in runs:
             run_view = RunView(run, self._next_run_order())
             current_block.add_run(run_view)
 
@@ -57,8 +57,8 @@ class Parser:
         if not matches:
             return
 
-        for para in matches[0].findall("w:p", DOCX_NS):
-            self._parse_paragraph(para, BlockType.FOOTNOTE, document)
+        runs = matches[0].findall(".//w:r", DOCX_NS)
+        self._walk_runs(runs, BlockType.FOOTNOTE, document)
 
     def _next_run_order(self) -> int:
         order = self._run_counter
