@@ -1,7 +1,6 @@
 import zipfile
 from lxml import etree
-from src.constants import BlockType, DOCX_NS
-from src.parser.models import Block, Document, RunView
+from src.parser.models import Block, Document, RunView, BlockType, DOCX_NS
 
 DOCUMENT_PART = "word/document.xml"
 FOOTNOTES_PART = "word/footnotes.xml"

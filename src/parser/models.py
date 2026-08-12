@@ -1,9 +1,45 @@
+from enum import Enum, auto
 from dataclasses import dataclass, field
 from typing import List
 from lxml import etree
-from src.constants import BlockType, DOCX_NS, RUN_TYPE_MAP, RunType
 
+# ----- CONSTANTS -----
+DOCX_NS = {
+    'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+}
 
+class RunType(Enum):
+    # Ordinary run
+    TEXT = auto()
+
+    # Whitespace / character elements
+    TAB_CHAR = auto()
+    LINE_BREAK = auto()
+    CARRIAGE_RETURN = auto()
+    NON_BREAKING_HYPHEN = auto()
+    OPTIONAL_HYPHEN = auto()
+
+    # Reference markers
+    FOOTNOTE_REF = auto()
+    ENDNOTE_REF = auto()
+    COMMENT_REF = auto()
+
+RUN_TYPE_MAP = {
+    "w:tab": RunType.TAB_CHAR,
+    "w:br": RunType.LINE_BREAK,
+    "w:cr": RunType.CARRIAGE_RETURN,
+    "w:noBreakHyphen": RunType.NON_BREAKING_HYPHEN,
+    "w:softHyphen": RunType.OPTIONAL_HYPHEN,
+    "w:footnoteReference": RunType.FOOTNOTE_REF,
+    "w:endnoteReference": RunType.ENDNOTE_REF,
+    "w:commentReference": RunType.COMMENT_REF,
+}
+
+class BlockType(Enum):
+    PARAGRAPH = auto()
+    FOOTNOTE = auto()
+
+# ----- MAIN CLASSES -----
 @dataclass
 class RunView:
     """Manages a run XML object."""
