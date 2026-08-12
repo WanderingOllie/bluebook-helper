@@ -40,7 +40,7 @@ class BlockType(Enum):
     FOOTNOTE = auto()
 
 # ----- MAIN CLASSES -----
-@dataclass
+@dataclass(eq=False)
 class RunView:
     """Manages a run XML object."""
     run: etree.Element
@@ -70,7 +70,7 @@ class RunView:
             return self.type == RunType.FOOTNOTE_REF
 
 
-@dataclass
+@dataclass(eq=False)
 class Block:
     """
     A series of RunView objects. Represents a block of text split on paragraph
@@ -87,7 +87,8 @@ class Block:
         return self._runs
 
 
-@dataclass
+
+@dataclass(eq=False)
 class Document:
     """
     Final output object of Parser.
