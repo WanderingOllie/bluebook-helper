@@ -1,6 +1,6 @@
 from enum import Enum, auto
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Tuple
 from lxml import etree
 
 # ----- CONSTANTS -----
@@ -83,9 +83,64 @@ class Block:
     def add_run(self, run: RunView) -> None:
         self._runs.append(run)
 
+    def get_text(self) -> str:
+        """Returns flat string of all text in Block's runs."""
+        text = "".join(run.get_text() for run in self.get_runs())
+        return text
+
     def get_runs(self) -> List[RunView]:
         return self._runs
 
+    def runs_between(self, start_run: RunView, end_run: RunView
+    ) -> List[RunView]:
+        """Returns the runs from start_run to end_run, inclusive."""
+        start_index = self._runs.index(start_run)
+        end_index = self._runs.index(end_run)
+        return self._runs[start_index:end_index + 1]
+
+    def resolve_offset(self, offset: int) -> Tuple[RunView, int]:
+        """
+        Given a character offset into block.get_text(), return which run
+        owns that character and the offset within that run's text.
+        """
+        runs = self.get_runs()
+        char_count = 0
+
+        for run in runs:
+            pre_count = char_count
+            char_count += len(run.get_text())
+            if pre_count <= offset < char_count:
+                return run, offset - pre_count
+
+        raise ValueError(
+            f"Offset {offset} is out of bounds for block text of length {char_count}."
+        )
+
+    def flat_offset_of(self, run: RunView, local_offset: int) -> int:
+            """
+            Given a run belonging to this block and an offset within that
+            run's own text, return the corresponding flat offset into
+            block.get_text(). The inverse of resolve_offset.
+            """
+            char_count = 0
+            for candidate in self.get_runs():
+                if candidate is run:
+                    return char_count + local_offset
+                char_count += len(candidate.get_text())
+    
+            raise ValueError(f"{run!r} does not belong to this block.")
+
+    def resolve_span(
+        self, start: int, end: int
+    ) -> Tuple[RunView, int, RunView, int]:
+        """
+        Given a flat [start, end) character span into block.get_text(),
+        return (start_run, start_offset, end_run, end_offset) ready to
+        build a TextRange.
+        """
+        start_run, start_offset = self.resolve_offset(start)
+        end_run, end_offset = self.resolve_offset(end - 1)
+        return start_run, start_offset, end_run, end_offset + 1
 
 
 @dataclass(eq=False)
