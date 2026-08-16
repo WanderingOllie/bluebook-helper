@@ -43,7 +43,7 @@ class BlockType(Enum):
 @dataclass(eq=False)
 class RunView:
     """Manages a run XML object."""
-    run: etree.Element
+    run: etree._Element
     reading_order: int
     type: RunType = field(init=False, default=RunType.TEXT)
 
@@ -57,13 +57,16 @@ class RunView:
     def get_text(self) -> str:
         """Returns text of run or a blank string."""
         text_element = self.run.find("w:t", DOCX_NS)
-        return text_element.text if text_element is not None else ""
+        if text_element is None:
+            return ""
+        return text_element.text or ""
 
     def get_footnote_id(self) -> str:
         """Returns the run's footnote id if it's a footnote reference."""
         footnote_ref = self.run.find("w:footnoteReference", DOCX_NS)
-        footnote_id = footnote_ref.get(f"{{{DOCX_NS['w']}}}id")
-        return footnote_id
+        if footnote_ref is None:
+            return ""
+        return footnote_ref.get(f"{{{DOCX_NS['w']}}}id") or ""
 
     def is_footnote_ref(self) -> bool:
             """Returns if the run is a footnote reference."""
@@ -91,60 +94,60 @@ class Block:
     def get_runs(self) -> List[RunView]:
         return self._runs
 
-    def runs_between(self, start_run: RunView, end_run: RunView
-    ) -> List[RunView]:
-        """Returns the runs from start_run to end_run, inclusive."""
-        start_index = self._runs.index(start_run)
-        end_index = self._runs.index(end_run)
-        return self._runs[start_index:end_index + 1]
+    # def runs_between(self, start_run: RunView, end_run: RunView
+    # ) -> List[RunView]:
+    #     """Returns the runs from start_run to end_run, inclusive."""
+    #     start_index = self._runs.index(start_run)
+    #     end_index = self._runs.index(end_run)
+    #     return self._runs[start_index:end_index + 1]
 
-    def resolve_offset(self, offset: int) -> Tuple[RunView, int]:
-        """
-        Given a character offset into block.get_text(), return which run
-        owns that character and the offset within that run's text.
-        """
-        runs = self.get_runs()
-        char_count = 0
+    # def resolve_offset(self, offset: int) -> Tuple[RunView, int]:
+    #     """
+    #     Given a character offset into block.get_text(), return which run
+    #     owns that character and the offset within that run's text.
+    #     """
+    #     runs = self.get_runs()
+    #     char_count = 0
 
-        for run in runs:
-            pre_count = char_count
-            char_count += len(run.get_text())
-            if pre_count <= offset < char_count:
-                return run, offset - pre_count
+    #     for run in runs:
+    #         pre_count = char_count
+    #         char_count += len(run.get_text())
+    #         if pre_count <= offset < char_count:
+    #             return run, offset - pre_count
 
-        raise ValueError(
-            f"Offset {offset} is out of bounds for block text of length {char_count}."
-        )
+    #     raise ValueError(
+    #         f"Offset {offset} is out of bounds for block text of length {char_count}."
+    #     )
 
-    def flat_offset_of(self, run: RunView, local_offset: int) -> int:
-            """
-            Given a run belonging to this block and an offset within that
-            run's own text, return the corresponding flat offset into
-            block.get_text(). The inverse of resolve_offset.
-            """
-            char_count = 0
-            for candidate in self.get_runs():
-                if candidate is run:
-                    return char_count + local_offset
-                char_count += len(candidate.get_text())
+    # def flat_offset_of(self, run: RunView, local_offset: int) -> int:
+    #         """
+    #         Given a run belonging to this block and an offset within that
+    #         run's own text, return the corresponding flat offset into
+    #         block.get_text(). The inverse of resolve_offset.
+    #         """
+    #         char_count = 0
+    #         for candidate in self.get_runs():
+    #             if candidate is run:
+    #                 return char_count + local_offset
+    #             char_count += len(candidate.get_text())
     
-            raise ValueError(f"{run!r} does not belong to this block.")
+    #         raise ValueError(f"{run!r} does not belong to this block.")
 
-    def resolve_span(
-        self, start: int, end: int
-    ) -> Tuple[RunView, int, RunView, int]:
-        """
-        Given a flat [start, end) character span into block.get_text(),
-        return (start_run, start_offset, end_run, end_offset) ready to
-        build a TextRange.
-        """
-        start_run, start_offset = self.resolve_offset(start)
-        end_run, end_offset = self.resolve_offset(end - 1)
-        return start_run, start_offset, end_run, end_offset + 1
+    # def resolve_span(
+    #     self, start: int, end: int
+    # ) -> Tuple[RunView, int, RunView, int]:
+    #     """
+    #     Given a flat [start, end) character span into block.get_text(),
+    #     return (start_run, start_offset, end_run, end_offset) ready to
+    #     build a TextRange.
+    #     """
+    #     start_run, start_offset = self.resolve_offset(start)
+    #     end_run, end_offset = self.resolve_offset(end - 1)
+    #     return start_run, start_offset, end_run, end_offset + 1
 
 
 @dataclass(eq=False)
-class Document:
+class BasicDocument:
     """
     Final output object of Parser.
     """

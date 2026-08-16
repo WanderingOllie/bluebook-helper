@@ -1,6 +1,7 @@
+from typing import cast
 import zipfile
 from lxml import etree
-from src.parser.models import Block, Document, RunView, BlockType, DOCX_NS
+from src.parser.models import Block, BasicDocument, RunView, BlockType, DOCX_NS
 
 DOCUMENT_PART = "word/document.xml"
 FOOTNOTES_PART = "word/footnotes.xml"
@@ -20,15 +21,15 @@ class Parser:
         self._run_counter = 0
         self._block_counter = 0
 
-    def parse(self) -> Document:
+    def parse(self) -> BasicDocument:
         """Parse the document body into a Document of ordered Blocks."""
-        document = Document()
+        document = BasicDocument()
         runs = self._document_tree.findall(".//w:r", DOCX_NS)
         self._walk_runs(runs, BlockType.PARAGRAPH, document)
         return document
 
     def _walk_runs(
-        self, runs: list[etree.Element], block_type: BlockType, document: Document
+        self, runs: list[etree._Element], block_type: BlockType, document: BasicDocument
     ) -> None:
         """Walk a sequence of runs, splitting into blocks on footnote refs."""
         current_block = Block(self._next_block_order(), block_type)
@@ -45,13 +46,16 @@ class Parser:
         if current_block.get_runs():
             document.add_block(current_block)
 
-    def _parse_footnote(self, footnote_id: str, document: Document) -> None:
+    def _parse_footnote(self, footnote_id: str, document: BasicDocument) -> None:
         """Look up a footnote by id in footnotes.xml and parse its content."""
         if self._footnotes_tree is None:
             return
 
-        matches = self._footnotes_tree.xpath(
-            f'.//w:footnote[@w:id="{footnote_id}"]', namespaces=DOCX_NS
+        matches = cast(
+            list[etree._Element],
+            self._footnotes_tree.xpath(
+                f'.//w:footnote[@w:id="{footnote_id}"]', namespaces=DOCX_NS
+            ),
         )
         if not matches:
             return
