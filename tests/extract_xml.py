@@ -1,19 +1,20 @@
 """
 Extracts word/document.xml (and word/footnotes.xml, if present) from a real
-.docx file into tests/files/<tier>/.
+.docx file into tests/files/<tier>/ or tests/files/util/<name>/.
 
 Usage:
     uv run python tests/extract_xml.py path/to/source.docx footnote
+    uv run python tests/extract_xml.py path/to/trimmed.docx util --name split_on_footnote
 """
 
 import argparse
 import re
 import sys
 import zipfile
-from helpers import DOCUMENT_PART, FOOTNOTES_PART, FILES_DIR, TestFileTier
+from helpers import DOCUMENT_PART, FOOTNOTES_PART, TestFileTier, fixture_dir
 
 
-def extract(docx_path: str, tier: TestFileTier) -> None:
+def extract(docx_path: str, tier: TestFileTier, name: str | None = None) -> None:
     with zipfile.ZipFile(docx_path) as z:
         if DOCUMENT_PART not in z.namelist():
             raise FileNotFoundError(f"{docx_path} has no {DOCUMENT_PART}.")
@@ -22,7 +23,7 @@ def extract(docx_path: str, tier: TestFileTier) -> None:
             z.read(FOOTNOTES_PART) if FOOTNOTES_PART in z.namelist() else None
         )
 
-    out_dir = FILES_DIR / tier.name.lower()
+    out_dir = fixture_dir(tier, name)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     (out_dir / "document.xml").write_bytes(document_xml)
@@ -63,8 +64,23 @@ def main() -> None:
         choices=[t.name.lower() for t in TestFileTier],
         help="Which fixture tier to write into (tests/files/<tier>/).",
     )
+    parser.add_argument(
+        "--name",
+        help=(
+            "Scenario name for the UTIL tier, e.g. 'split_on_footnote' "
+            "(writes to tests/files/util/<name>/). Required for tier=util, "
+            "unused otherwise."
+        ),
+    )
     args = parser.parse_args()
-    extract(args.docx_path, TestFileTier[args.tier.upper()])
+    tier = TestFileTier[args.tier.upper()]
+
+    if tier is TestFileTier.UTIL and not args.name:
+        parser.error("tier=util requires --name <scenario_name>.")
+    if tier is not TestFileTier.UTIL and args.name:
+        parser.error("--name is only used with tier=util.")
+
+    extract(args.docx_path, tier, args.name)
 
 
 if __name__ == "__main__":
