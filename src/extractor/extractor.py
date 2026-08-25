@@ -1,39 +1,59 @@
-from typing import Tuple
+from typing import Optional
 import re
 from src.parser.models import Block
-from src.extractor.models import TextRange
+from src.refiner.models import RefinedDocument
+from src.extractor.models import CitationClause, CitationSentence, ExtractedDocument
+from src.llm.client import LLM
 
 
-def locate(text: str, needle: str, start: int = 0) -> Tuple[int, int]:
-    """
-    Finds needle within text starting at index start. Returns the
-    (start, end) character offsets of the match, with end exclusive.
-    """
-    index = text.find(needle, start)
-    if index != -1:
-        return index, index + len(needle)
+_CITATION_SIGNAL_PATTERNS = [
+    re.compile(r"§"),                                    # section symbol
+    re.compile(r"\bv\.\s"),                              # case name separator
+    re.compile(r"\(\d{4}\)"),                            # citation year, e.g. "(1954)"
+    re.compile(r"\b\d+\s+[A-Z][A-Za-z.]{1,10}\s+\d+\b"), # reporter cite, e.g. "347 U.S. 483"
+    re.compile(r"\bid\.", re.IGNORECASE),                # short-form citation
+    re.compile(r"\bsupra\b|\binfra\b", re.IGNORECASE),
+    re.compile(r"\bU\.S\.C\.|\bC\.F\.R\."),
+]
 
-    # Fallback to try whitespace-tolerant match 
-    pattern = re.compile(r"\s+".join(re.escape(word) for word in needle.split()))
-    match = pattern.search(text, start)
-    if match is None:
-        raise ValueError(f"Could not locate {needle!r} in text starting at index {start}.")
+class Extractor:
+    """Takes in a RefinedDocument and produces an ExtractedDocument."""
 
-    return match.start(), match.end()
+    def __init__(self, document: RefinedDocument, llm: Optional[LLM] = None) -> None:
+        self._document = document
+        self._llm = llm if llm is not None else LLM()
 
-def locate_range(block: Block, needle: str, start: int = 0) -> TextRange:
-    """Locates needle within block's own text and builds a TextRange."""
-    span_start, span_end = locate(block.get_text(), needle, start)
-    start_run, start_offset, end_run, end_offset = block.resolve_span(span_start, span_end)
-    return TextRange(block, start_run, start_offset, end_run, end_offset)
+    def extract(self) -> ExtractedDocument:
+        extracted_doc = ExtractedDocument(self._document)
 
-def locate_nested_range(parent: TextRange, needle: str, start: int = 0) -> TextRange:
-    """Locates needle within parent's own text and builds a nested TextRange."""
-    block = parent.get_source_block()
-    local_start, local_end = locate(parent.get_text(), needle, start)
+        for block in self._document.blocks:
+            if not self._filter_block(block):
+                continue
+            extracted_doc.sentences.extend(self._extract_sentences(block))
 
-    block_base = block.flat_offset_of(parent.get_start_run(), parent.get_start_offset())
-    start_run, start_offset, end_run, end_offset = block.resolve_span(
-        block_base + local_start, block_base + local_end
-    )
-    return TextRange(block, start_run, start_offset, end_run, end_offset)
+        return extracted_doc
+
+    def _extract_sentences(self, block: Block) -> list[CitationSentence]:
+        """Extracts every CitationSentence found in a single block."""
+        block_text = block.text
+        block_chars = self._document.char_map[block]
+        sentences = []
+
+        for sentence_text in self._llm.extract_citation_sentences(block_text):
+            sentence_start = block_text.index(sentence_text)
+            clauses = []
+
+            for clause_text in self._llm.extract_citation_clauses(sentence_text):
+                clause_start = sentence_start + sentence_text.index(clause_text)
+                clause_end = clause_start + len(clause_text)
+                characters = block_chars[clause_start:clause_end]
+                clauses.append(CitationClause(characters=characters))
+
+            sentences.append(CitationSentence(clauses=clauses))
+
+        return sentences
+
+    @staticmethod
+    def _filter_block(block: Block) -> bool:
+        """Checks if a Block is likely to have citations inside."""
+        return any(pattern.search(block.text) for pattern in _CITATION_SIGNAL_PATTERNS)
