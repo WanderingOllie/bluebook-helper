@@ -8,6 +8,8 @@ FOOTNOTES_PART = "word/footnotes.xml"
 FILES_DIR = Path(__file__).parent / "files"
 
 class TestFileTier(Enum):
+    __test__ = False     # not a pytest test class
+
     BASIC = auto()       # most basic case (prose, in-text cites, no footnotes)
     FOOTNOTE = auto()    # basic case plus foonotes
     COMPLEX = auto()     # footnote case plus comments and tracked changes

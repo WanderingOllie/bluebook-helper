@@ -1,10 +1,31 @@
 from lxml import etree
 import pytest
-from src.parser.models import DOCX_NS, RunType, RunView
+from src.parser.models import BlockType, DOCX_NS, RunType, RunView
+from src.parser.parser import Parser
+from helpers import build_docx, build_tier_docx, TestFileTier
 
 def _run(inner: str) -> etree._Element:
     """Builds a <w:r> fragment with the w: namespace declared."""
     return etree.fromstring(f'<w:r xmlns:w="{DOCX_NS["w"]}">{inner}</w:r>')
+
+
+def _r(inner: str = "") -> str:
+    """<w:r> fragment string, for embedding in a larger document/footnotes body."""
+    return f"<w:r>{inner}</w:r>"
+
+
+def _document(body_xml: str) -> str:
+    """Wraps body content in a minimal <w:document> for Parser."""
+    return f'<w:document xmlns:w="{DOCX_NS["w"]}"><w:body>{body_xml}</w:body></w:document>'
+
+
+def _footnotes(*footnotes_xml: str) -> str:
+    """Wraps footnote entries in a minimal <w:footnotes> for Parser."""
+    return f'<w:footnotes xmlns:w="{DOCX_NS["w"]}">{"".join(footnotes_xml)}</w:footnotes>'
+
+
+def _footnote(footnote_id: str, inner: str) -> str:
+    return f'<w:footnote w:id="{footnote_id}">{inner}</w:footnote>'
 
 # ------ MODEL TESTS ------
 def test_text_run_has_text_type_and_matching_characters():
@@ -96,3 +117,120 @@ def test_footnote_id_is_empty_for_non_footnote_run():
     run = RunView(_run("<w:t>not a footnote</w:t>"), 0)
 
     assert run.footnote_id == ""
+
+# ------ PARSER TESTS ------
+def test_single_paragraph_without_footnotes_produces_one_block(tmp_path):
+    document_xml = _document(f"<w:p>{_r('<w:t>Hello world</w:t>')}</w:p>")
+    path = build_docx(tmp_path, document_xml)
+
+    document = Parser(str(path)).parse()
+
+    assert len(document.blocks) == 1
+    assert document.blocks[0].type is BlockType.PARAGRAPH
+    assert document.blocks[0].text == "Hello world"
+
+
+def test_footnote_reference_splits_paragraph_into_three_blocks(tmp_path):
+    path = build_tier_docx(tmp_path, TestFileTier.UTIL, name="split_on_footnote")
+
+    document = Parser(str(path)).parse()
+
+    assert [(b.type, b.text) for b in document.blocks] == [
+        (
+            BlockType.PARAGRAPH,
+            "Returning to our hypothetical foreign minister of a U.S. trading "
+            "partner, if that foreign minister were to choose to petition or "
+            "lobby the agency that makes distilled-spirits regulations, that "
+            "agency would be the Department of the Treasury’s Alcohol and "
+            "Tobacco Tax and Trade Bureau (TTB), which regulates spirits.",
+        ),
+        (
+            BlockType.FOOTNOTE,
+            " See 27 U.S.C. § 205(e) (2024) (explaining that the Secretary "
+            "of the Treasury Department is in control of regulating the "
+            "labeling of spirits).",
+        ),
+        (
+            BlockType.PARAGRAPH,
+            " TTB monitors and oversees the definitions, labeling, and "
+            "movement through interstate and foreign commerce of wines and "
+            "spirits.",
+        ),
+    ]
+
+
+def test_unmatched_footnote_reference_id_is_skipped(tmp_path):
+    """Guards the parser.py:60 fallback for a footnote ref with no matching id."""
+    path = build_tier_docx(tmp_path, TestFileTier.UTIL, name="no_matching_footnote")
+
+    document = Parser(str(path)).parse()
+
+    assert [b.type for b in document.blocks] == [
+        BlockType.PARAGRAPH,
+        BlockType.PARAGRAPH,
+    ]
+    assert document.blocks[0].text.startswith("Returning to our hypothetical")
+    assert document.blocks[1].text.startswith(" TTB monitors")
+
+
+def test_missing_footnotes_part_skips_footnote_reference(tmp_path):
+    path = build_tier_docx(tmp_path, TestFileTier.UTIL, name="missing_footnotes")
+
+    document = Parser(str(path)).parse()
+
+    assert [b.type for b in document.blocks] == [
+        BlockType.PARAGRAPH,
+        BlockType.PARAGRAPH,
+    ]
+    assert document.blocks[0].text.startswith("Returning to our hypothetical")
+    assert document.blocks[1].text.startswith(" TTB monitors")
+
+
+def test_two_footnote_references_in_one_paragraph_split_into_five_blocks(tmp_path):
+    body = (
+        "<w:p>"
+        + _r("<w:t>A</w:t>")
+        + _r('<w:footnoteReference w:id="1"/>')
+        + _r("<w:t>B</w:t>")
+        + _r('<w:footnoteReference w:id="2"/>')
+        + _r("<w:t>C</w:t>")
+        + "</w:p>"
+    )
+    document_xml = _document(body)
+    footnotes_xml = _footnotes(
+        _footnote("1", _r("<w:t>one</w:t>")),
+        _footnote("2", _r("<w:t>two</w:t>")),
+    )
+    path = build_docx(tmp_path, document_xml, footnotes_xml)
+
+    document = Parser(str(path)).parse()
+
+    assert [(b.type, b.text) for b in document.blocks] == [
+        (BlockType.PARAGRAPH, "A"),
+        (BlockType.FOOTNOTE, "one"),
+        (BlockType.PARAGRAPH, "B"),
+        (BlockType.FOOTNOTE, "two"),
+        (BlockType.PARAGRAPH, "C"),
+    ]
+
+
+def test_reading_order_is_monotonic_across_blocks_and_runs(tmp_path):
+    path = build_tier_docx(tmp_path, TestFileTier.UTIL, name="split_on_footnote")
+
+    document = Parser(str(path)).parse()
+
+    block_orders = [b.reading_order for b in document.blocks]
+    assert block_orders == list(range(len(block_orders)))
+
+    run_orders = [r.reading_order for b in document.blocks for r in b.runs]
+    assert run_orders == sorted(run_orders)
+    assert len(set(run_orders)) == len(run_orders)
+
+
+def test_paragraph_with_no_runs_produces_no_blocks(tmp_path):
+    document_xml = _document("<w:p/>")
+    path = build_docx(tmp_path, document_xml)
+
+    document = Parser(str(path)).parse()
+
+    assert document.blocks == []
