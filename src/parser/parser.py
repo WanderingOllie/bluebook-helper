@@ -1,7 +1,7 @@
 from typing import cast
 import zipfile
 from lxml import etree
-from src.parser.models import Block, BasicDocument, RunView, BlockType, DOCX_NS
+from src.parser.models import Block, BasicDocument, RunView, BlockType, RunType, DOCX_NS
 
 DOCUMENT_PART = "word/document.xml"
 FOOTNOTES_PART = "word/footnotes.xml"
@@ -36,15 +36,15 @@ class Parser:
 
         for run in runs:
             run_view = RunView(run, self._next_run_order())
-            current_block.add_run(run_view)
+            current_block.runs.append(run_view)
 
-            if run_view.is_footnote_ref():
-                document.add_block(current_block)
-                self._parse_footnote(run_view.get_footnote_id(), document)
+            if run_view.type is RunType.FOOTNOTE_REF:
+                document.blocks.append(current_block)
+                self._parse_footnote(run_view.footnote_id, document)
                 current_block = Block(self._next_block_order(), block_type)
 
-        if current_block.get_runs():
-            document.add_block(current_block)
+        if current_block.runs:
+            document.blocks.append(current_block)
 
     def _parse_footnote(self, footnote_id: str, document: BasicDocument) -> None:
         """Look up a footnote by id in footnotes.xml and parse its content."""
