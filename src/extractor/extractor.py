@@ -1,9 +1,15 @@
-from typing import Optional
+from typing import Optional, Protocol
 import re
 from src.parser.models import Block
 from src.refiner.models import RefinedDocument
 from src.extractor.models import CitationClause, CitationSentence, ExtractedDocument
 from src.llm.client import LLM
+
+
+# Define protocol to allow easier mocking of LLM for testing
+class CitationTextExtractor(Protocol):
+    def extract_citation_sentences(self, text: str) -> list[str]: ...
+    def extract_citation_clauses(self, text: str) -> list[str]: ...
 
 
 _CITATION_SIGNAL_PATTERNS = [
@@ -19,7 +25,9 @@ _CITATION_SIGNAL_PATTERNS = [
 class Extractor:
     """Takes in a RefinedDocument and produces an ExtractedDocument."""
 
-    def __init__(self, document: RefinedDocument, llm: Optional[LLM] = None) -> None:
+    def __init__(
+        self, document: RefinedDocument, llm: Optional[CitationTextExtractor] = None
+    ) -> None:
         self._document = document
         self._llm = llm if llm is not None else LLM()
 

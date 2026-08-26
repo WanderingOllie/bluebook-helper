@@ -27,6 +27,8 @@ class ExtractedTextList(BaseModel):
 class LLM:
     """
     Manages interactions with LLM for structured data extraction.
+
+    Implicitly implements CitationTextExtractor protocol.
     """
 
     def __init__(self) -> None:
