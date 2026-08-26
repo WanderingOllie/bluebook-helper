@@ -1,19 +1,13 @@
-from lxml import etree
-from src.parser.models import BasicDocument, Block, BlockType, DOCX_NS, RunView
+from src.parser.models import BasicDocument, Block, BlockType
 from src.parser.parser import Parser
 from src.refiner.models import RefinedDocument
 from src.refiner.refiner import Refiner
+from builders import run_view
 from helpers import build_tier_docx, TestFileTier
 
 
-def _run_view(inner: str, reading_order: int = 0) -> RunView:
-    """Builds a RunView from a <w:r> fragment with the w: namespace declared."""
-    xml = etree.fromstring(f'<w:r xmlns:w="{DOCX_NS["w"]}">{inner}</w:r>')
-    return RunView(xml, reading_order)
-
-
 def test_refined_document_copies_blocks_and_starts_with_empty_char_map():
-    block = Block(0, BlockType.PARAGRAPH, [_run_view("<w:t>hi</w:t>")])
+    block = Block(0, BlockType.PARAGRAPH, [run_view("<w:t>hi</w:t>")])
     basic_doc = BasicDocument(blocks=[block])
 
     refined_doc = RefinedDocument(basic_doc)
@@ -23,8 +17,8 @@ def test_refined_document_copies_blocks_and_starts_with_empty_char_map():
 
 
 def test_refine_populates_one_char_map_entry_per_block():
-    block_a = Block(0, BlockType.PARAGRAPH, [_run_view("<w:t>a</w:t>")])
-    block_b = Block(1, BlockType.FOOTNOTE, [_run_view("<w:t>b</w:t>")])
+    block_a = Block(0, BlockType.PARAGRAPH, [run_view("<w:t>a</w:t>")])
+    block_b = Block(1, BlockType.FOOTNOTE, [run_view("<w:t>b</w:t>")])
     basic_doc = BasicDocument(blocks=[block_a, block_b])
 
     refined_doc = Refiner(basic_doc).refine()
@@ -33,7 +27,7 @@ def test_refine_populates_one_char_map_entry_per_block():
 
 
 def test_single_run_block_char_map_matches_run_characters():
-    block = Block(0, BlockType.PARAGRAPH, [_run_view("<w:t>hi</w:t>")])
+    block = Block(0, BlockType.PARAGRAPH, [run_view("<w:t>hi</w:t>")])
     basic_doc = BasicDocument(blocks=[block])
 
     refined_doc = Refiner(basic_doc).refine()
@@ -45,7 +39,7 @@ def test_multi_run_block_flattens_in_run_order():
     block = Block(
         0,
         BlockType.PARAGRAPH,
-        [_run_view("<w:t>Hello</w:t>"), _run_view("<w:t> world</w:t>")],
+        [run_view("<w:t>Hello</w:t>"), run_view("<w:t> world</w:t>")],
     )
     basic_doc = BasicDocument(blocks=[block])
 
@@ -69,10 +63,10 @@ def test_mixed_run_types_flatten_in_order_within_a_block():
         0,
         BlockType.PARAGRAPH,
         [
-            _run_view("<w:t>A</w:t>"),
-            _run_view("<w:tab/>"),
-            _run_view('<w:footnoteReference w:id="1"/>'),
-            _run_view("<w:t>B</w:t>"),
+            run_view("<w:t>A</w:t>"),
+            run_view("<w:tab/>"),
+            run_view('<w:footnoteReference w:id="1"/>'),
+            run_view("<w:t>B</w:t>"),
         ],
     )
     basic_doc = BasicDocument(blocks=[block])
@@ -83,8 +77,8 @@ def test_mixed_run_types_flatten_in_order_within_a_block():
 
 
 def test_multiple_blocks_have_isolated_char_map_entries():
-    block_a = Block(0, BlockType.PARAGRAPH, [_run_view("<w:t>para</w:t>")])
-    block_b = Block(1, BlockType.FOOTNOTE, [_run_view("<w:t>note</w:t>")])
+    block_a = Block(0, BlockType.PARAGRAPH, [run_view("<w:t>para</w:t>")])
+    block_b = Block(1, BlockType.FOOTNOTE, [run_view("<w:t>note</w:t>")])
     basic_doc = BasicDocument(blocks=[block_a, block_b])
 
     refined_doc = Refiner(basic_doc).refine()
@@ -94,7 +88,7 @@ def test_multiple_blocks_have_isolated_char_map_entries():
 
 
 def test_characters_retain_formatting_through_refiner():
-    run = _run_view("<w:rPr><w:b/><w:i/></w:rPr><w:t>x</w:t>")
+    run = run_view("<w:rPr><w:b/><w:i/></w:rPr><w:t>x</w:t>")
     block = Block(0, BlockType.PARAGRAPH, [run])
     basic_doc = BasicDocument(blocks=[block])
 

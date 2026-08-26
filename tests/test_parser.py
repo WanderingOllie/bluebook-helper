@@ -1,13 +1,8 @@
-from lxml import etree
 import pytest
-from src.parser.models import BlockType, DOCX_NS, RunType, RunView
+from src.parser.models import BlockType, DOCX_NS, RunType
 from src.parser.parser import Parser
+from builders import run_view
 from helpers import build_docx, build_tier_docx, TestFileTier
-
-def _run(inner: str) -> etree._Element:
-    """Builds a <w:r> fragment with the w: namespace declared."""
-    return etree.fromstring(f'<w:r xmlns:w="{DOCX_NS["w"]}">{inner}</w:r>')
-
 
 def _r(inner: str = "") -> str:
     """<w:r> fragment string, for embedding in a larger document/footnotes body."""
@@ -29,7 +24,7 @@ def _footnote(footnote_id: str, inner: str) -> str:
 
 # ------ MODEL TESTS ------
 def test_text_run_has_text_type_and_matching_characters():
-    run = RunView(_run("<w:t>Hi there</w:t>"), 0)
+    run = run_view("<w:t>Hi there</w:t>")
 
     assert run.type is RunType.TEXT
     assert [c.char for c in run.characters] == list("Hi there")
@@ -51,14 +46,14 @@ def test_text_run_has_text_type_and_matching_characters():
 def test_special_tags_map_to_run_type_and_characters(
     tag_xml, expected_type, expected_chars
 ):
-    run = RunView(_run(tag_xml), 0)
+    run = run_view(tag_xml)
 
     assert run.type is expected_type
     assert [c.char for c in run.characters] == expected_chars
 
 
 def test_run_without_run_properties_defaults_formatting_to_false():
-    run = RunView(_run("<w:t>plain</w:t>"), 0)
+    run = run_view("<w:t>plain</w:t>")
 
     assert run.bold is False
     assert run.italic is False
@@ -67,10 +62,10 @@ def test_run_without_run_properties_defaults_formatting_to_false():
 
 
 def test_run_properties_set_each_formatting_flag_independently():
-    bold_run = RunView(_run("<w:rPr><w:b/></w:rPr><w:t>x</w:t>"), 0)
-    italic_run = RunView(_run("<w:rPr><w:i/></w:rPr><w:t>x</w:t>"), 0)
-    underline_run = RunView(_run("<w:rPr><w:u/></w:rPr><w:t>x</w:t>"), 0)
-    small_caps_run = RunView(_run("<w:rPr><w:smallCaps/></w:rPr><w:t>x</w:t>"), 0)
+    bold_run = run_view("<w:rPr><w:b/></w:rPr><w:t>x</w:t>")
+    italic_run = run_view("<w:rPr><w:i/></w:rPr><w:t>x</w:t>")
+    underline_run = run_view("<w:rPr><w:u/></w:rPr><w:t>x</w:t>")
+    small_caps_run = run_view("<w:rPr><w:smallCaps/></w:rPr><w:t>x</w:t>")
 
     assert (bold_run.bold, bold_run.italic, bold_run.underline, bold_run.small_caps) == (
         True, False, False, False,
@@ -87,7 +82,7 @@ def test_run_properties_set_each_formatting_flag_independently():
 
 
 def test_run_properties_combine_multiple_formatting_flags():
-    run = RunView(_run("<w:rPr><w:b/><w:i/></w:rPr><w:t>x</w:t>"), 0)
+    run = run_view("<w:rPr><w:b/><w:i/></w:rPr><w:t>x</w:t>")
 
     assert run.bold is True
     assert run.italic is True
@@ -96,25 +91,25 @@ def test_run_properties_combine_multiple_formatting_flags():
 
 
 def test_missing_text_element_has_no_characters():
-    run = RunView(_run(""), 0)
+    run = run_view("")
 
     assert run.characters == []
 
 
 def test_empty_text_element_has_no_characters():
-    run = RunView(_run("<w:t></w:t>"), 0)
+    run = run_view("<w:t></w:t>")
 
     assert run.characters == []
 
 
 def test_footnote_id_returns_id_attribute():
-    run = RunView(_run('<w:footnoteReference w:id="42"/>'), 0)
+    run = run_view('<w:footnoteReference w:id="42"/>')
 
     assert run.footnote_id == "42"
 
 
 def test_footnote_id_is_empty_for_non_footnote_run():
-    run = RunView(_run("<w:t>not a footnote</w:t>"), 0)
+    run = run_view("<w:t>not a footnote</w:t>")
 
     assert run.footnote_id == ""
 
