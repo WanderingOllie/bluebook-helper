@@ -8,10 +8,8 @@ class Spotter:
     """Walks a document, spotting Issues using Rules."""
 
     def __init__(
-        self, 
-        document: ExtractedDocument, 
-        rules: List[Rule] = ALL_RULES
-    ) -> None:
+            self, document: ExtractedDocument, rules: List[Rule] = ALL_RULES
+            ) -> None:
         self._document = document
         self._rules = rules
 

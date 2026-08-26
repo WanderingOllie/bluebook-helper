@@ -1,6 +1,7 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Callable, List, Optional
+from typing import List, Optional
 from src.parser.models import Block, Character
 from src.extractor.models import CitationSentence, ExtractedDocument, CitationClause
 
@@ -20,11 +21,14 @@ class Issue:
     comment: str
 
 
-@dataclass
-class Rule:
+class Rule(ABC):
+    """Base class for Spotter rules."""
     name: str
     runs_on: RuleRunsOn
-    check: Callable[[CitationSentence | CitationClause], List[Issue]]
+
+    @abstractmethod
+    def check(self, target: CitationSentence | CitationClause) -> List[Issue]:
+        ...
 
     def run(self, target: CitationSentence | CitationClause) -> List[Issue]:
         return self.check(target)
